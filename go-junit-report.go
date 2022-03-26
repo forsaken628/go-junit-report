@@ -21,6 +21,7 @@ var (
 	goVersionFlag = flag.String("go-version", "", "specify the value to use for the go.version property in the generated XML")
 	setExitCode   = flag.Bool("set-exit-code", false, "set exit code to 1 if tests failed")
 	version       = flag.Bool("version", false, "print version")
+	jsonFlag      = flag.Bool("json", false, "parse json input")
 )
 
 func main() {
@@ -37,8 +38,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	parse := parser.Parse
+	if *jsonFlag {
+		parse = parser.ParseJson
+	}
 	// Read input
-	report, err := parser.Parse(os.Stdin, *packageName)
+	report, err := parse(os.Stdin, *packageName)
 	if err != nil {
 		fmt.Printf("Error reading input: %s\n", err)
 		os.Exit(1)

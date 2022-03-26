@@ -1,0 +1,16 @@
+{"Time":"2022-03-26T16:00:09.1904988+08:00","Action":"run","Package":"package/name","Test":"TestOne"}
+{"Time":"2022-03-26T16:00:09.1915755+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"=== RUN   TestOne\n"}
+{"Time":"2022-03-26T16:00:09.1916286+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"--- FAIL: TestOne (0.02s)\n"}
+{"Time":"2022-03-26T16:00:09.1916286+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"\tfile_test.go:11: Error message\n"}
+{"Time":"2022-03-26T16:00:09.1916286+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"\tfile_test.go:11: Longer\n"}
+{"Time":"2022-03-26T16:00:09.1916286+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"\t\terror\n"}
+{"Time":"2022-03-26T16:00:09.1916286+08:00","Action":"output","Package":"package/name","Test":"TestOne","Output":"\t\tmessage.\n"}
+{"Time":"2022-03-26T16:00:09.1916513+08:00","Action":"fail","Package":"package/name","Test":"TestOne","Elapsed":0.02}
+{"Time":"2022-03-26T16:00:09.1916763+08:00","Action":"run","Package":"package/name","Test":"TestTwo"}
+{"Time":"2022-03-26T16:00:09.1916991+08:00","Action":"output","Package":"package/name","Test":"TestTwo","Output":"=== RUN   TestTwo\n"}
+{"Time":"2022-03-26T16:00:09.1917215+08:00","Action":"output","Package":"package/name","Test":"TestTwo","Output":"--- PASS: TestTwo (0.13s)\n"}
+{"Time":"2022-03-26T16:00:09.1917466+08:00","Action":"pass","Package":"package/name","Test":"TestTwo","Elapsed":0.13}
+{"Time":"2022-03-26T16:00:09.1917681+08:00","Action":"output","Package":"package/name","Output":"FAIL\n"}
+{"Time":"2022-03-26T16:00:09.1918339+08:00","Action":"output","Package":"package/name","Output":"exit status 1\n"}
+{"Time":"2022-03-26T16:00:09.1918572+08:00","Action":"output","Package":"package/name","Output":"FAIL\tpackage/name\t0.151s\n"}
+{"Time":"2022-03-26T16:00:09.1918813+08:00","Action":"fail","Package":"package/name","Elapsed":0.151}

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -20,6 +22,7 @@ var matchTest = flag.String("match", "", "only test testdata matching this patte
 
 type TestCase struct {
 	name        string
+	jsonName    string
 	reportName  string
 	report      *parser.Report
 	noXMLHeader bool
@@ -29,6 +32,7 @@ type TestCase struct {
 var testCases = []TestCase{
 	{
 		name:       "01-pass.txt",
+		jsonName:   "01-pass.jsonl",
 		reportName: "01-report.xml",
 		report: &parser.Report{
 			Packages: []parser.Package{
@@ -58,6 +62,7 @@ var testCases = []TestCase{
 	},
 	{
 		name:       "02-fail.txt",
+		jsonName:   "02-fail.jsonl",
 		reportName: "02-report.xml",
 		report: &parser.Report{
 			Packages: []parser.Package{
@@ -1568,98 +1573,114 @@ func TestParser(t *testing.T) {
 		}
 		t.Logf("Test %s", testCase.name)
 
-		file, err := os.Open("testdata/" + testCase.name)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		report, err := parser.Parse(file, testCase.packageName)
-		if err != nil {
-			t.Fatalf("error parsing: %s", err)
-		}
-
-		if report == nil {
-			t.Fatalf("Report == nil")
-		}
-
-		expected := testCase.report
-		if len(report.Packages) != len(expected.Packages) {
-			t.Fatalf("Report packages == %d, want %d", len(report.Packages), len(expected.Packages))
-		}
-
-		for i, pkg := range report.Packages {
-			expPkg := expected.Packages[i]
-
-			if pkg.Name != expPkg.Name {
-				t.Errorf("Package.Name == %s, want %s", pkg.Name, expPkg.Name)
+		for i := 0; i < 2; i++ {
+			var fileName string
+			var parse func(r io.Reader, pkgName string) (*parser.Report, error)
+			switch i {
+			case 0:
+				fileName = testCase.name
+				parse = parser.Parse
+			case 1:
+				fileName = testCase.jsonName
+				parse = parser.ParseJson
+			}
+			if fileName == "" {
+				continue
 			}
 
-			if pkg.Duration != expPkg.Duration {
-				t.Errorf("Package.Duration == %s, want %s", pkg.Duration, expPkg.Duration)
+			data, err := os.ReadFile(filepath.Join("testdata", fileName))
+			if err != nil {
+				t.Fatal(err)
 			}
 
-			// pkg.Time is deprecated
-			if pkg.Time != expPkg.Time {
-				t.Errorf("Package.Time == %d, want %d", pkg.Time, expPkg.Time)
+			report, err := parse(bytes.NewReader(data), testCase.packageName)
+			if err != nil {
+				t.Fatalf("error parsing: %s", err)
 			}
 
-			if len(pkg.Tests) != len(expPkg.Tests) {
-				t.Fatalf("Package Tests == %d, want %d", len(pkg.Tests), len(expPkg.Tests))
+			if report == nil {
+				t.Fatalf("Report == nil")
 			}
 
-			for j, test := range pkg.Tests {
-				expTest := expPkg.Tests[j]
-
-				if test.Name != expTest.Name {
-					t.Errorf("Test.Name == %s, want %s", test.Name, expTest.Name)
-				}
-
-				if test.Duration != expTest.Duration {
-					t.Errorf("Test.Duration == %s, want %s", test.Duration, expTest.Duration)
-				}
-
-				// test.Time is deprecated
-				if test.Time != expTest.Time {
-					t.Errorf("Test.Time == %d, want %d", test.Time, expTest.Time)
-				}
-
-				if test.Result != expTest.Result {
-					t.Errorf("Test.Result == %d, want %d", test.Result, expTest.Result)
-				}
-
-				testOutput := strings.Join(test.Output, "\n")
-				expTestOutput := strings.Join(expTest.Output, "\n")
-				if testOutput != expTestOutput {
-					t.Errorf("Test.Output (%s) ==\n%s\n, want\n%s", test.Name, testOutput, expTestOutput)
-				}
+			expected := testCase.report
+			if len(report.Packages) != len(expected.Packages) {
+				t.Fatalf("Report packages == %d, want %d", len(report.Packages), len(expected.Packages))
 			}
 
-			if len(pkg.Benchmarks) != len(expPkg.Benchmarks) {
-				t.Fatalf("Package Benchmarks == %d, want %d", len(pkg.Benchmarks), len(expPkg.Benchmarks))
-			}
+			for i, pkg := range report.Packages {
+				expPkg := expected.Packages[i]
 
-			for j, benchmark := range pkg.Benchmarks {
-				expBenchmark := expPkg.Benchmarks[j]
-
-				if benchmark.Name != expBenchmark.Name {
-					t.Errorf("Test.Name == %s, want %s", benchmark.Name, expBenchmark.Name)
+				if pkg.Name != expPkg.Name {
+					t.Errorf("Package.Name == %s, want %s", pkg.Name, expPkg.Name)
 				}
 
-				if benchmark.Duration != expBenchmark.Duration {
-					t.Errorf("benchmark.Duration == %s, want %s", benchmark.Duration, expBenchmark.Duration)
+				if pkg.Duration != expPkg.Duration {
+					t.Errorf("Package.Duration == %s, want %s", pkg.Duration, expPkg.Duration)
 				}
 
-				if benchmark.Bytes != expBenchmark.Bytes {
-					t.Errorf("benchmark.Bytes == %d, want %d", benchmark.Bytes, expBenchmark.Bytes)
+				// pkg.Time is deprecated
+				if pkg.Time != expPkg.Time {
+					t.Errorf("Package.Time == %d, want %d", pkg.Time, expPkg.Time)
 				}
 
-				if benchmark.Allocs != expBenchmark.Allocs {
-					t.Errorf("benchmark.Allocs == %d, want %d", benchmark.Allocs, expBenchmark.Allocs)
+				if len(pkg.Tests) != len(expPkg.Tests) {
+					t.Fatalf("Package Tests == %d, want %d", len(pkg.Tests), len(expPkg.Tests))
 				}
-			}
 
-			if pkg.CoveragePct != expPkg.CoveragePct {
-				t.Errorf("Package.CoveragePct == %s, want %s", pkg.CoveragePct, expPkg.CoveragePct)
+				for j, test := range pkg.Tests {
+					expTest := expPkg.Tests[j]
+
+					if test.Name != expTest.Name {
+						t.Errorf("Test.Name == %s, want %s", test.Name, expTest.Name)
+					}
+
+					if test.Duration != expTest.Duration {
+						t.Errorf("Test.Duration == %s, want %s", test.Duration, expTest.Duration)
+					}
+
+					// test.Time is deprecated
+					if test.Time != expTest.Time {
+						t.Errorf("Test.Time == %d, want %d", test.Time, expTest.Time)
+					}
+
+					if test.Result != expTest.Result {
+						t.Errorf("Test.Result == %d, want %d", test.Result, expTest.Result)
+					}
+
+					testOutput := strings.Join(test.Output, "\n")
+					expTestOutput := strings.Join(expTest.Output, "\n")
+					if testOutput != expTestOutput {
+						t.Errorf("Test.Output (%s) ==\n%s\n, want\n%s", test.Name, testOutput, expTestOutput)
+					}
+				}
+
+				if len(pkg.Benchmarks) != len(expPkg.Benchmarks) {
+					t.Fatalf("Package Benchmarks == %d, want %d", len(pkg.Benchmarks), len(expPkg.Benchmarks))
+				}
+
+				for j, benchmark := range pkg.Benchmarks {
+					expBenchmark := expPkg.Benchmarks[j]
+
+					if benchmark.Name != expBenchmark.Name {
+						t.Errorf("Test.Name == %s, want %s", benchmark.Name, expBenchmark.Name)
+					}
+
+					if benchmark.Duration != expBenchmark.Duration {
+						t.Errorf("benchmark.Duration == %s, want %s", benchmark.Duration, expBenchmark.Duration)
+					}
+
+					if benchmark.Bytes != expBenchmark.Bytes {
+						t.Errorf("benchmark.Bytes == %d, want %d", benchmark.Bytes, expBenchmark.Bytes)
+					}
+
+					if benchmark.Allocs != expBenchmark.Allocs {
+						t.Errorf("benchmark.Allocs == %d, want %d", benchmark.Allocs, expBenchmark.Allocs)
+					}
+				}
+
+				if pkg.CoveragePct != expPkg.CoveragePct {
+					t.Errorf("Package.CoveragePct == %s, want %s", pkg.CoveragePct, expPkg.CoveragePct)
+				}
 			}
 		}
 	}

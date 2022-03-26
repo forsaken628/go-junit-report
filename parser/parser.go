@@ -2,6 +2,8 @@ package parser
 
 import (
 	"bufio"
+	"encoding/json"
+	"errors"
 	"io"
 	"regexp"
 	"strconv"
@@ -316,4 +318,119 @@ func (r *Report) Failures() int {
 	}
 
 	return count
+}
+
+type TestEvent struct {
+	Time time.Time // encodes as an RFC3339-format string
+	//    run    - the test has started running
+	//    pause  - the test has been paused
+	//    cont   - the test has continued running
+	//    pass   - the test passed
+	//    bench  - the benchmark printed log output but did not fail
+	//    fail   - the test or benchmark failed
+	//    output - the test printed output
+	//    skip   - the test was skipped or the package contained no tests
+	Action  string
+	Package string
+	Test    string
+	Elapsed float64 // seconds
+	Output  string
+}
+
+type status struct {
+	other  map[string]TestEvent
+	output []string
+}
+
+func ParseJson(r io.Reader, pkgName string) (*Report, error) {
+	de := json.NewDecoder(r)
+
+	report := Report{}
+	pkgIdx := make(map[string]int)
+	eventIdx := make(map[[2]string]*status) // Package,Test
+	for {
+		event := TestEvent{}
+		err := de.Decode(&event)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := pkgIdx[event.Package]; !ok {
+			report.Packages = append(report.Packages, Package{
+				Name: event.Package,
+			})
+			pkgIdx[event.Package] = len(report.Packages) - 1
+		}
+
+		s, ok := eventIdx[[2]string{event.Package, event.Test}]
+		if !ok {
+			s = &status{
+				other: make(map[string]TestEvent),
+			}
+			eventIdx[[2]string{event.Package, event.Test}] = s
+		}
+
+		if event.Action != "output" {
+			s.other[event.Action] = event
+			continue
+		}
+
+		if strings.HasPrefix(event.Output, "--- ") || strings.HasPrefix(event.Output, "=== ") {
+			continue
+		}
+
+		output := strings.TrimPrefix(event.Output, "\t")
+		s.output = append(s.output, strings.TrimSuffix(output, "\n"))
+	}
+
+	for k, s := range eventIdx {
+		pkg := &report.Packages[pkgIdx[k[0]]]
+		// package
+		if k[1] == "" {
+			updatePackage(pkg, s)
+			continue
+		}
+
+		// test
+		addTest(pkg, s)
+	}
+
+	return &report, nil
+}
+
+func updatePackage(pkg *Package, s *status) {
+	for _, ac := range []string{"pass", "skip", "fail"} {
+		if ev, ok := s.other[ac]; ok {
+			pkg.Duration = time.Duration(ev.Elapsed*1e6) * time.Microsecond
+			pkg.Time = int(ev.Elapsed * 1e3)
+			return
+		}
+	}
+}
+
+func addTest(pkg *Package, s *status) {
+	if _, ok := s.other["run"]; !ok {
+		return
+	}
+
+	acMap := []Result{PASS, SKIP, FAIL}
+	for i, ac := range []string{"pass", "skip", "fail"} {
+		ev, ok := s.other[ac]
+		if !ok {
+			continue
+		}
+
+		pkg.Tests = append(pkg.Tests, &Test{
+			Name:          ev.Test,
+			Duration:      time.Duration(ev.Elapsed*1e6) * time.Microsecond,
+			Result:        acMap[i],
+			Output:        s.output,
+			SubtestIndent: "",
+			Time:          int(ev.Elapsed * 1e3),
+		})
+		return
+	}
 }
